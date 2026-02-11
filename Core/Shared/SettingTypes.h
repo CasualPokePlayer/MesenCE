@@ -496,6 +496,8 @@ struct GbaConfig
 	uint32_t Square2Vol = 100;
 	uint32_t NoiseVol = 100;
 	uint32_t WaveVol = 100;
+
+	int64_t GbaCustomDate = -1;
 };
 
 enum class PceConsoleType

@@ -150,6 +150,60 @@ bool Serializer::LoadFrom(istream& file)
 	return _values.size() > 0;
 }
 
+bool Serializer::LoadFrom(const uint8_t* stateBuf, uint32_t size)
+{
+	if(_saving) {
+		return false;
+	}
+
+	if(_format == SerializeFormat::Text) {
+		return false;
+	}
+
+	_data.resize(size);
+	memcpy(_data.data(), stateBuf, size);
+
+	size = (uint32_t)_data.size();
+	uint32_t i = 0;
+	string key;
+	while(i < size) {
+		key.clear();
+		for(uint32_t j = i; j < size; j++) {
+			if(_data[j] == 0) {
+				key.append((char*)&_data[i]);
+				break;
+			} else if(_data[j] <= ' ' || _data[j] >= 127) {
+				//invalid characters in key, state is invalid
+				return false;
+			}
+		}
+
+		if(key.empty()) {
+			//invalid
+			return false;
+		}
+
+		i += (uint32_t)key.size() + 1;
+		if(i + 4 > size) {
+			//invalid
+			return false;
+		}
+
+		uint32_t valueSize = _data[i] | (_data[i + 1] << 8) | (_data[i + 2] << 16) | (_data[i + 3] << 24);
+		i += 4;
+		if(i + valueSize > size) {
+			//invalid
+			return false;
+		}
+
+		_values.emplace(key, SerializeValue(i < _data.size() ? &_data[i] : nullptr, valueSize));
+
+		i += valueSize;
+	}
+
+	return _values.size() > 0;
+}
+
 bool Serializer::LoadFromTextFormat(istream& file)
 {
 	uint32_t pos = (uint32_t)file.tellg();
@@ -230,6 +284,12 @@ void Serializer::SaveTo(ostream& file, int compressionLevel)
 			file.write((char*)_data.data(), _data.size());
 		}
 	}
+}
+
+void Serializer::SaveTo(vector<uint8_t>& out)
+{
+	out.resize(_data.size());
+	memcpy(out.data(), _data.data(), _data.size());
 }
 
 void Serializer::LoadFromMap(unordered_map<string, SerializeMapValue>& map)

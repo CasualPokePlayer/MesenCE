@@ -146,6 +146,7 @@ void EmuSettings::Serialize(Serializer& s)
 			SV(_gba.RamPowerOnState);
 			SV(_gba.OverclockScanlineCount);
 			SV(_gba.Controller.Type);
+			SV(_gba.GbaCustomDate);
 			break;
 
 		case ConsoleType::Ws:
@@ -349,12 +350,6 @@ AudioPlayerConfig& EmuSettings::GetAudioPlayerConfig()
 void EmuSettings::SetDebugConfig(DebugConfig& config)
 {
 	_debug = config;
-
-	DebuggerRequest req = _emu->GetDebugger(false);
-	Debugger* dbg = req.GetDebugger();
-	if(dbg) {
-		dbg->ProcessConfigChange();
-	}
 }
 
 DebugConfig& EmuSettings::GetDebugConfig()
@@ -551,12 +546,6 @@ void EmuSettings::SetDebuggerFlag(DebuggerFlags flag, bool enabled)
 		if((_debuggerFlags & (uint64_t)flag) != 0) {
 			_debuggerFlags &= ~(uint64_t)flag;
 		}
-	}
-
-	DebuggerRequest req = _emu->GetDebugger(false);
-	Debugger* dbg = req.GetDebugger();
-	if(dbg) {
-		dbg->ProcessConfigChange();
 	}
 }
 

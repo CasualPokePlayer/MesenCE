@@ -186,6 +186,10 @@ void MovieRecorder::OnLoadBattery(string extension, vector<uint8_t> batteryData)
 	_batteryData[extension] = batteryData;
 }
 
+void MovieRecorder::SaveBattery(string extension, uint8_t* data, uint32_t length)
+{
+}
+
 vector<uint8_t> MovieRecorder::LoadBattery(string extension)
 {
 	return vector<uint8_t>();

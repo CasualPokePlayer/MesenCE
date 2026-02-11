@@ -496,7 +496,9 @@ public:
 	void PushNamePrefix(const char* name, int index = -1);
 	void PopNamePrefix();
 	void SaveTo(ostream& file, int compressionLevel = 1);
+	void SaveTo(vector<uint8_t>& out);
 	bool LoadFrom(istream& file);
+	bool LoadFrom(const uint8_t* stateBuf, uint32_t size);
 	void LoadFromMap(unordered_map<string, SerializeMapValue>& map);
 };
 

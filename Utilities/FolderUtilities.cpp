@@ -68,71 +68,37 @@ void FolderUtilities::SetFolderOverrides(string saveFolder, string saveStateFold
 
 string FolderUtilities::GetSaveFolder()
 {
-	string folder;
-	if(_saveFolderOverride.empty()) {
-		folder = CombinePath(GetHomeFolder(), "Saves");
-	} else {
-		folder = _saveFolderOverride;
-	}
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetFirmwareFolder()
 {
-	string folder;
-	if(_firmwareFolderOverride.empty()) {
-		folder = CombinePath(GetHomeFolder(), "Firmware");
-	} else {
-		folder = _firmwareFolderOverride;
-	}
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetHdPackFolder()
 {
-	string folder = CombinePath(GetHomeFolder(), "HdPacks");
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetDebuggerFolder()
 {
-	string folder = CombinePath(GetHomeFolder(), "Debugger");
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetSaveStateFolder()
 {
-	string folder;
-	if(_saveStateFolderOverride.empty()) {
-		folder = CombinePath(GetHomeFolder(), "SaveStates");
-	} else {
-		folder = _saveStateFolderOverride;
-	}
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetScreenshotFolder()
 {
-	string folder;
-	if(_screenshotFolderOverride.empty()) {
-		folder = CombinePath(GetHomeFolder(), "Screenshots");
-	} else {
-		folder = _screenshotFolderOverride;
-	}
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetRecentGamesFolder()
 {
-	string folder = CombinePath(GetHomeFolder(), "RecentGames");
-	CreateFolder(folder);
-	return folder;
+	return "";
 }
 
 string FolderUtilities::GetExtension(string filename)
@@ -228,7 +194,7 @@ string FolderUtilities::GetFolderName(string filepath)
 string FolderUtilities::CombinePath(string folder, string filename)
 {
 	//Windows supports forward slashes for paths, too.  And fs::u8path is abnormally slow.
-	if(folder[folder.length() - 1] != '/') {
+	if(!folder.empty() && folder[folder.length() - 1] != '/') {
 		return folder + "/" + filename;
 	} else {
 		return folder + filename;

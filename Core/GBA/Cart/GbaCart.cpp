@@ -32,7 +32,7 @@ void GbaCart::Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryM
 	}
 
 	if(rtcType == GbaRtcType::Enabled) {
-		_rtc.reset(new GbaRtc(emu));
+		_rtc.reset(new GbaRtc(emu, console));
 		_gpio.reset(new GbaGpio(_rtc.get()));
 	}
 

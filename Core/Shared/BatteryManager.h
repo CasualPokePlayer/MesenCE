@@ -4,6 +4,7 @@
 class IBatteryProvider
 {
 public:
+	virtual void SaveBattery(string extension, uint8_t* data, uint32_t length) = 0;
 	virtual vector<uint8_t> LoadBattery(string extension) = 0;
 };
 

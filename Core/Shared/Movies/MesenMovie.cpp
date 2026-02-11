@@ -85,6 +85,10 @@ bool MesenMovie::IsPlaying()
 	return _playing;
 }
 
+void MesenMovie::SaveBattery(string extension, uint8_t* data, uint32_t length)
+{
+}
+
 vector<uint8_t> MesenMovie::LoadBattery(string extension)
 {
 	vector<uint8_t> batteryData;

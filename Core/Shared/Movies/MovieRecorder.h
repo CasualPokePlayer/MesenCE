@@ -43,6 +43,7 @@ public:
 
 	// Inherited via IBatteryRecorder
 	void OnLoadBattery(string extension, vector<uint8_t> batteryData) override;
+	void SaveBattery(string extension, uint8_t* data, uint32_t length) override;
 	vector<uint8_t> LoadBattery(string extension) override;
 
 	// Inherited via INotificationListener

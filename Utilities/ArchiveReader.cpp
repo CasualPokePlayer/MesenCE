@@ -98,8 +98,6 @@ unique_ptr<ArchiveReader> ArchiveReader::GetReader(std::istream& in)
 	unique_ptr<ArchiveReader> reader;
 	if(memcmp(header, "PK", 2) == 0) {
 		reader.reset(new ZipReader());
-	} else if(memcmp(header, "7z", 2) == 0) {
-		reader.reset(new SZReader());
 	}
 
 	if(reader) {

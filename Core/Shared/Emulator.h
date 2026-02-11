@@ -66,11 +66,11 @@ private:
 	//Used by the Process[..] debugger hooks which run exclusively on the emulation thread.
 	//Temporarily set to null while executing the secondary console for e.g VS DualSystem or dual GB modes.
 	//This prevents the secondary console from interacting with the debugger (because this does not work properly at the moment)
-	Debugger* _internalDebugger = nullptr;
+	//Debugger* _internalDebugger = nullptr;
 
 	unique_ptr<thread> _emuThread;
 	unique_ptr<AudioPlayerHud> _audioPlayerHud;
-	safe_ptr<Debugger> _debugger;
+	//safe_ptr<Debugger> _debugger;
 	shared_ptr<SystemActionManager> _systemActionManager;
 	shared_ptr<ShortcutKeyHandler> _shortcutKeyHandler;
 
@@ -230,8 +230,8 @@ public:
 	void InitDebugger();
 	void StopDebugger();
 	DebuggerRequest GetDebugger(bool autoInit = false);
-	bool IsDebugging() { return !!_debugger; }
-	Debugger* InternalGetDebugger() { return _debugger.get(); }
+	bool IsDebugging() { return false; }
+	Debugger* InternalGetDebugger() { return nullptr; }
 
 	thread::id GetEmulationThreadId() { return _emulationThreadId; }
 	bool IsEmulationThread();
@@ -264,80 +264,47 @@ public:
 
 	template<CpuType type> __forceinline void ProcessInstruction()
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessInstruction<type>();
-		}
 	}
 
 	template<CpuType type, uint8_t accessWidth = 1, MemoryAccessFlags flags = MemoryAccessFlags::None, typename T> __forceinline void ProcessMemoryRead(uint32_t addr, T& value, MemoryOperationType opType)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessMemoryRead<type, accessWidth, flags>(addr, value, opType);
-		}
 	}
 
 	template<CpuType type, uint8_t accessWidth = 1, MemoryAccessFlags flags = MemoryAccessFlags::None, typename T> __forceinline bool ProcessMemoryWrite(uint32_t addr, T& value, MemoryOperationType opType)
 	{
-		if(_internalDebugger) {
-			return _internalDebugger->ProcessMemoryWrite<type, accessWidth, flags>(addr, value, opType);
-		}
 		return true;
 	}
 
 	template<CpuType cpuType, MemoryType memType, MemoryOperationType opType, typename T> __forceinline void ProcessMemoryAccess(uint32_t addr, T value)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessMemoryAccess<cpuType, memType, opType, T>(addr, value);
-		}
 	}
 
 	template<CpuType type> __forceinline void ProcessIdleCycle()
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessIdleCycle<type>();
-		}
 	}
 
 	template<CpuType type> __forceinline void ProcessHaltedCpu()
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessHaltedCpu<type>();
-		}
 	}
 
 	template<CpuType type, typename T> __forceinline void ProcessPpuRead(uint32_t addr, T& value, MemoryType memoryType, MemoryOperationType opType = MemoryOperationType::Read)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessPpuRead<type>(addr, value, memoryType, opType);
-		}
 	}
 
 	template<CpuType type, typename T> __forceinline void ProcessPpuWrite(uint32_t addr, T& value, MemoryType memoryType)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessPpuWrite<type>(addr, value, memoryType);
-		}
 	}
 
 	template<CpuType type> __forceinline void ProcessPpuCycle()
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessPpuCycle<type>();
-		}
 	}
 
 	template<CpuType type> void ProcessInterrupt(uint32_t originalPc, uint32_t currentPc, bool forNmi)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->ProcessInterrupt<type>(originalPc, currentPc, forNmi);
-		}
 	}
 
 	__forceinline void DebugLog(string log)
 	{
-		if(_internalDebugger) {
-			_internalDebugger->Log(log);
-		}
 	}
 
 	void ProcessEvent(EventType type, std::optional<CpuType> cpuType = std::nullopt);

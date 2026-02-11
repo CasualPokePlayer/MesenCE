@@ -3,18 +3,30 @@
 #include "Utilities/Serializer.h"
 #include "Utilities/TimeUtilities.h"
 #include "Shared/Emulator.h"
+#include "Shared/EmuSettings.h"
 #include "Shared/BatteryManager.h"
 
-GbaRtc::GbaRtc(Emulator* emu)
+GbaRtc::GbaRtc(Emulator* emu, GbaConsole* console)
 {
 	_emu = emu;
+	_console = console;
 
 	_state.Month = 1;
 	_state.Day = 1;
 	_state.Status = 0x02;
 	_state.IntHour = 0x80;
 
-	_lastUpdateTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	_lastUpdateMasterClock = _console->GetMasterClock();
+
+	int64_t initTime = _emu->GetSettings()->GetGbaConfig().GbaCustomDate;
+	if(initTime == -1) {
+		initTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
+
+	//Set initial time by seconds since Jan 1, 2000
+	_state.Status = 0x40;
+	_state.DoW = 6;
+	UpdateTime(initTime - 946684800);
 }
 
 uint8_t GbaRtc::SanitizeData(uint8_t value, uint8_t maxValue, uint8_t fixedValue)
@@ -157,12 +169,23 @@ void GbaRtc::Reset()
 	_state = {};
 	_state.Month = 1;
 	_state.Day = 1;
+	_lastUpdateMasterClock = _console->GetMasterClock();
 }
 
 void GbaRtc::UpdateTime()
 {
-	uint64_t currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-	uint32_t elapsedSeconds = (uint32_t)(currentTime - _lastUpdateTime);
+	uint64_t currentMasterClock = _console->GetMasterClock();
+	uint32_t elapsedSeconds = (uint32_t)(currentMasterClock - _lastUpdateMasterClock) / _console->GetMasterClockRate();
+	if(elapsedSeconds == 0) {
+		return;
+	}
+
+	UpdateTime(elapsedSeconds);
+	_lastUpdateMasterClock = currentMasterClock;
+}
+
+void GbaRtc::UpdateTime(int64_t elapsedSeconds)
+{
 	if(elapsedSeconds <= 0) {
 		return;
 	}
@@ -184,7 +207,6 @@ void GbaRtc::UpdateTime()
 	std::time_t tt = TimeUtilities::TmToUtc(&tm);
 	if(tt == -1) {
 		//Invalid time
-		_lastUpdateTime = currentTime;
 		return;
 	}
 
@@ -232,8 +254,6 @@ void GbaRtc::UpdateTime()
 
 	int dow = newTm.tm_wday - dowGap;
 	_state.DoW = dow < 0 ? (dow + 7) : (dow % 7);
-
-	_lastUpdateTime = currentTime;
 }
 
 void GbaRtc::LoadBattery()
@@ -257,9 +277,13 @@ void GbaRtc::LoadBattery()
 			time <<= 8;
 			time |= rtcData[sizeof(_state) + i];
 		}
-		_lastUpdateTime = time;
-	} else {
-		_lastUpdateTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+		uint64_t currentTime = _emu->GetSettings()->GetGbaConfig().GbaCustomDate;
+		if(currentTime == (uint64_t)-1) {
+			currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		}
+
+		UpdateTime(currentTime - time);
 	}
 }
 
@@ -280,7 +304,11 @@ void GbaRtc::SaveBattery()
 
 	rtcData.resize(sizeof(_state) + sizeof(uint64_t), 0);
 
-	uint64_t time = _lastUpdateTime;
+	uint64_t time = _emu->GetSettings()->GetGbaConfig().GbaCustomDate;
+	if(time == (uint64_t)-1) {
+		time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
+
 	for(uint32_t i = 0; i < sizeof(uint64_t); i++) {
 		rtcData[sizeof(_state) + i] = (time >> 56) & 0xFF;
 		time <<= 8;
@@ -363,7 +391,7 @@ void GbaRtc::Serialize(Serializer& s)
 	SV(_dataInSize);
 	SV(_bitOut);
 	SV(_chipSelect);
-	SV(_lastUpdateTime);
+	SV(_lastUpdateMasterClock);
 	SV(_prevValue);
 
 	SV(_state.Year);

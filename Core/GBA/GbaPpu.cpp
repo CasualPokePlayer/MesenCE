@@ -133,7 +133,7 @@ void GbaPpu::ProcessEndOfScanline()
 	if(_state.Scanline == _vblankStartScanline) {
 		_oamScanline = 0;
 		_state.ObjEnableTimer = 0;
-		SendFrame();
+		_state.FrameCount++;
 		if(_state.VblankIrqEnabled) {
 			_console->GetMemoryManager()->SetDelayedIrqSource(GbaIrqSource::LcdVblank, 1);
 		}
@@ -1588,14 +1588,6 @@ uint8_t GbaPpu::ReadRegister(uint32_t addr)
 
 void GbaPpu::DebugProcessMemoryAccessView()
 {
-	//Store memory access buffer in ppu tools to display in tilemap viewer
-	GbaPpuTools* ppuTools = ((GbaPpuTools*)_emu->InternalGetDebugger()->GetPpuTools(CpuType::Gba));
-	//Skip vblank scanlines (except last scanline) to avoid issues with overclock
-	if(_state.Scanline < 160) {
-		ppuTools->SetMemoryAccessData(_state.Scanline, _memoryAccess);
-	} else if(_state.Scanline == _lastScanline) {
-		ppuTools->SetMemoryAccessData(227, _memoryAccess);
-	}
 }
 
 void GbaPpu::Serialize(Serializer& s)

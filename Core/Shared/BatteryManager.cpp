@@ -36,10 +36,16 @@ void BatteryManager::SaveBattery(string extension, uint8_t* data, uint32_t lengt
 		return;
 	}
 
+	shared_ptr<IBatteryProvider> provider = _provider.lock();
+
 	_hasBattery = true;
-	ofstream out(GetBasePath(extension), ios::binary);
-	if(out) {
-		out.write((char*)data, length);
+	if(provider) {
+		provider->SaveBattery(extension, data, length);
+	} else {
+		ofstream out(GetBasePath(extension), ios::binary);
+		if(out) {
+			out.write((char*)data, length);
+		}
 	}
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+#include "GBA/GbaConsole.h"
 #include "Utilities/ISerializable.h"
 
 class Emulator;
@@ -37,9 +38,10 @@ private:
 	};
 
 	Emulator* _emu = nullptr;
+	GbaConsole* _console = nullptr;
 
 	GbaRtcState _state = {};
-	uint64_t _lastUpdateTime = 0;
+	uint64_t _lastUpdateMasterClock = 0;
 
 	uint8_t _bitCounter = 0;
 	uint8_t _command = 0;
@@ -67,9 +69,10 @@ private:
 
 	void Reset();
 	void UpdateTime();
+	void UpdateTime(int64_t elapsedSeconds);
 
 public:
-	GbaRtc(Emulator* emu);
+	GbaRtc(Emulator* emu, GbaConsole* console);
 
 	void LoadBattery();
 	void SaveBattery();

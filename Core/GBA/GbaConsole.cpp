@@ -318,8 +318,41 @@ GbaDmaController* GbaConsole::GetDmaController()
 
 void GbaConsole::Reset()
 {
-	//The GB has no reset button, behave like power cycle
-	_emu->ReloadRom(true);
+	SaveBattery();
+
+	_emu->GetSettings()->InitializeRam(RamState::AllOnes, _saveRam, _saveRamSize);
+
+	InitializeRam(_intWorkRam, GbaConsole::IntWorkRamSize);
+	InitializeRam(_extWorkRam, GbaConsole::ExtWorkRamSize);
+	InitializeRam(_videoRam, GbaConsole::VideoRamSize);
+	InitializeRam(_spriteRam, GbaConsole::SpriteRamSize);
+	InitializeRam(_paletteRam, GbaConsole::PaletteRamSize);
+
+	_cpu.reset(new GbaCpu());
+	_ppu.reset(new GbaPpu());
+	_dmaController.reset(new GbaDmaController());
+	_timer.reset(new GbaTimer());
+	_apu.reset(new GbaApu());
+	_cart.reset(new GbaCart());
+	_serial.reset(new GbaSerial());
+	_controlManager.reset(new GbaControlManager(_emu, this));
+	_prefetch.reset(new GbaRomPrefetch());
+
+	_memoryManager.reset(new GbaMemoryManager(_emu, this, _ppu.get(), _dmaController.get(), _controlManager.get(), _timer.get(), _apu.get(), _cart.get(), _serial.get(), _prefetch.get()));
+
+	_prefetch->Init(_memoryManager->GetWaitStates(), this);
+	_cart->Init(_emu, this, _memoryManager.get(), _saveType, _rtcType, _cartType);
+	_ppu->Init(_emu, this, _memoryManager.get());
+	_apu->Init(_emu, this, _dmaController.get(), _memoryManager.get());
+	_timer->Init(_memoryManager.get(), _apu.get());
+	_dmaController->Init(_cpu.get(), _memoryManager.get(), _prefetch.get());
+	_cpu->Init(_emu, _memoryManager.get(), _prefetch.get());
+	_serial->Init(_emu, _memoryManager.get());
+	_controlManager->Init(_memoryManager.get());
+
+	LoadBattery();
+
+	_cpu->PowerOn();
 }
 
 void GbaConsole::RunFrame()

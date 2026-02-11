@@ -36,6 +36,7 @@
 #include "PCE/PceConsole.h"
 #include "SMS/SmsConsole.h"
 #include "GBA/GbaConsole.h"
+#include "GBA/GbaDefaultVideoFilter.h"
 #include "WS/WsConsole.h"
 #include "Debugger/Debugger.h"
 #include "Debugger/BaseEventManager.h"
@@ -77,6 +78,8 @@ Emulator::Emulator()
 	_blockDebuggerRequestCount = 0;
 
 	_videoDecoder->Init();
+
+	_systemActionManager.reset(new SystemActionManager(this));
 }
 
 Emulator::~Emulator()
@@ -133,7 +136,7 @@ void Emulator::Run()
 	_lastFrameTimer.Reset();
 
 	while(!_stopFlag) {
-		bool useRunAhead = _settings->GetEmulationConfig().RunAheadFrames > 0 && !_debugger && !_audioPlayerHud && !_rewindManager->IsRewinding() && _settings->GetEmulationSpeed() > 0 && _settings->GetEmulationSpeed() <= 100;
+		bool useRunAhead = _settings->GetEmulationConfig().RunAheadFrames > 0 && !_audioPlayerHud && !_rewindManager->IsRewinding() && _settings->GetEmulationSpeed() > 0 && _settings->GetEmulationSpeed() <= 100;
 		if(useRunAhead) {
 			RunFrameWithRunAhead();
 		} else {
@@ -152,7 +155,7 @@ void Emulator::Run()
 			_paused = true;
 		}
 
-		if(_paused && !_stopFlag && !_debugger) {
+		if(_paused && !_stopFlag) {
 			WaitForPauseEnd();
 		}
 	}
@@ -187,12 +190,6 @@ bool Emulator::ProcessSystemActions()
 {
 	if(_systemActionManager->IsResetPressed()) {
 		Reset();
-
-		shared_ptr<Debugger> debugger = _debugger.lock();
-		if(debugger) {
-			debugger->ResetSuspendCounter();
-		}
-
 		return true;
 	} else if(_systemActionManager->IsPowerCyclePressed()) {
 		PowerCycle();
@@ -400,15 +397,6 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 	//This allows the UI to finish processing pending calls to the debug tools, etc.
 	_notificationManager->SendNotification(ConsoleNotificationType::BeforeGameLoad);
 
-	bool wasPaused = IsPaused();
-
-	//Keep a reference to the original debugger
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	bool debuggerActive = debugger != nullptr;
-
-	//Unset _debugger to ensure nothing calls the debugger while initializing the new rom
-	ResetDebugger();
-
 	if(patchFile.IsValid()) {
 		if(romFile.ApplyPatch(patchFile)) {
 			MessageManager::DisplayMessage("Patch", "ApplyingPatch", patchFile.GetFileName());
@@ -441,19 +429,8 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 
 	if(result != LoadRomResult::Success) {
 		MessageManager::DisplayMessage("Error", "CouldNotLoadFile", romFile.GetFileName());
-		if(debugger) {
-			_debugger.reset(debugger);
-			_internalDebugger = _debugger.get();
-			debugger->ResetSuspendCounter();
-		}
 		_blockDebuggerRequestCount--;
 		return false;
-	}
-
-	//Cleanup debugger instance if one was active
-	if(debugger) {
-		debugger->Release();
-		debugger.reset();
 	}
 
 	if(stopRom) {
@@ -495,10 +472,6 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 
 	_rewindManager->InitHistory();
 
-	if(debuggerActive || _settings->CheckFlag(EmulationFlags::ConsoleMode)) {
-		InitDebugger();
-	}
-
 	_notificationManager->RegisterNotificationListener(_rewindManager);
 
 	//Ensure power cycle flag is off before recording input for first frame
@@ -515,14 +488,8 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 	dbgLock.Release();
 
 	_threadPaused = true;
-	bool needPause = wasPaused && _debugger;
-	if(needPause) {
-		//Break on the current instruction if emulation was already paused
-		//(must be done after setting _threadPaused to true)
-		_debugger->Step(GetCpuTypes()[0], 1, StepType::Step, BreakSource::Pause);
-	}
-
-	GameLoadedEventParams params = { needPause, forPowerCycle };
+	
+	GameLoadedEventParams params = { false, forPowerCycle };
 	_notificationManager->SendNotification(ConsoleNotificationType::GameLoaded, &params);
 	_threadPaused = false;
 
@@ -564,13 +531,7 @@ void Emulator::InitConsole(unique_ptr<IConsole>& newConsole, ConsoleMemoryInfo o
 
 void Emulator::TryLoadRom(VirtualFile& romFile, LoadRomResult& result, unique_ptr<IConsole>& console, bool useFileSignature)
 {
-	TryLoadRom<NesConsole>(romFile, result, console, useFileSignature);
-	TryLoadRom<SnesConsole>(romFile, result, console, useFileSignature);
-	TryLoadRom<Gameboy>(romFile, result, console, useFileSignature);
-	TryLoadRom<PceConsole>(romFile, result, console, useFileSignature);
-	TryLoadRom<SmsConsole>(romFile, result, console, useFileSignature);
 	TryLoadRom<GbaConsole>(romFile, result, console, useFileSignature);
-	TryLoadRom<WsConsole>(romFile, result, console, useFileSignature);
 }
 
 template<typename T>
@@ -780,43 +741,23 @@ double Emulator::GetFrameDelay()
 void Emulator::PauseOnNextFrame()
 {
 	//Used by "Run single frame" shortcut
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	if(debugger) {
-		debugger->PauseOnNextFrame();
-	} else {
-		_pauseOnNextFrame = true;
-		_paused = false;
-	}
+	_pauseOnNextFrame = true;
+	_paused = false;
 }
 
 void Emulator::Pause()
 {
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	if(debugger) {
-		debugger->Step(GetCpuTypes()[0], 1, StepType::Step, BreakSource::Pause);
-	} else {
-		_paused = true;
-	}
+	_paused = true;
 }
 
 void Emulator::Resume()
 {
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	if(debugger) {
-		debugger->Run();
-	} else {
-		_paused = false;
-	}
+	_paused = false;
 }
 
 bool Emulator::IsPaused()
 {
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	if(debugger) {
-		return debugger->IsPaused();
-	} else {
-		return _paused;
-	}
+	return _paused;
 }
 
 void Emulator::OnBeforePause(bool clearAudioBuffer)
@@ -838,7 +779,7 @@ void Emulator::WaitForPauseEnd()
 	PlatformUtilities::EnableScreensaver();
 	PlatformUtilities::RestoreTimerResolution();
 
-	while(_paused && !_rewindManager->IsRewinding() && !_stopFlag && !_debugger) {
+	while(_paused && !_rewindManager->IsRewinding() && !_stopFlag) {
 		//Sleep until emulation is resumed
 		std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(30));
 
@@ -891,10 +832,6 @@ bool Emulator::IsThreadPaused()
 
 void Emulator::SuspendDebugger(bool release)
 {
-	shared_ptr<Debugger> debugger = _debugger.lock();
-	if(debugger) {
-		debugger->SuspendDebugger(release);
-	}
 }
 
 void Emulator::WaitForLock()
@@ -907,11 +844,6 @@ void Emulator::WaitForLock()
 
 		//Spin wait until we are allowed to start again
 		while(_lockCounter > 0 && !_stopFlag) {}
-
-		shared_ptr<Debugger> debugger = _debugger.lock();
-		if(debugger) {
-			while(debugger->HasBreakRequest() && !_stopFlag) {}
-		}
 
 		if(!_stopFlag) {
 			_threadPaused = false;
@@ -988,7 +920,7 @@ DeserializeResult Emulator::Deserialize(istream& in, uint32_t fileFormatVersion,
 BaseVideoFilter* Emulator::GetVideoFilter(bool getDefaultFilter)
 {
 	shared_ptr<IConsole> console = GetConsole();
-	return console ? console->GetVideoFilter(getDefaultFilter) : new SnesDefaultVideoFilter(this);
+	return console ? console->GetVideoFilter(getDefaultFilter) : new GbaDefaultVideoFilter(this, false);
 }
 
 void Emulator::GetScreenRotationOverride(uint32_t& rotation)
@@ -1037,81 +969,23 @@ bool Emulator::IsKeyboardConnected()
 
 void Emulator::BlockDebuggerRequests()
 {
-	//Block all new debugger calls
-	auto lock = _debuggerLock.AcquireSafe();
-	_blockDebuggerRequestCount++;
-	if(_debugger) {
-		//Ensure any thread waiting on DebugBreakHelper is allowed to resume/finish (prevent deadlock)
-		_debugger->ResetSuspendCounter();
-	}
-
-	while(_debugRequestCount > 0) {
-		//Wait until debugger calls are all done
-		std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(10));
-	}
 }
 
 DebuggerRequest Emulator::GetDebugger(bool autoInit)
 {
-	if(IsRunning() && _blockDebuggerRequestCount == 0) {
-		auto lock = _debuggerLock.AcquireSafe();
-		if(IsRunning() && _blockDebuggerRequestCount == 0) {
-			if(!_debugger && autoInit) {
-				InitDebugger();
-			}
-			return DebuggerRequest(this);
-		}
-	}
 	return DebuggerRequest(nullptr);
 }
 
 void Emulator::ResetDebugger(bool startDebugger)
 {
-	shared_ptr<Debugger> currentDbg = _debugger.lock();
-	if(currentDbg) {
-		currentDbg->SuspendDebugger(false);
-	}
-
-	if(_emulationThreadId == std::this_thread::get_id()) {
-		_debugger.reset(startDebugger ? new Debugger(this, _console.get()) : nullptr);
-		_internalDebugger = _debugger.get();
-	} else {
-		//Need to pause emulator to change _debugger (when not called from the emulation thread)
-		auto emuLock = AcquireLock();
-		_debugger.reset(startDebugger ? new Debugger(this, _console.get()) : nullptr);
-		_internalDebugger = _debugger.get();
-	}
 }
 
 void Emulator::InitDebugger()
 {
-	if(!_debugger) {
-		//Lock to make sure we don't try to start debuggers in 2 separate threads at once
-		auto lock = _debuggerLock.AcquireSafe();
-		if(!_debugger) {
-			BlockDebuggerRequests();
-			ResetDebugger(true);
-			_blockDebuggerRequestCount--;
-
-			//_paused should be false while debugger is enabled
-			_paused = false;
-		}
-	}
 }
 
 void Emulator::StopDebugger()
 {
-	//Pause/unpause the regular emulation thread based on the debugger's pause state
-	_paused = IsPaused();
-
-	if(_debugger) {
-		auto lock = _debuggerLock.AcquireSafe();
-		if(_debugger) {
-			BlockDebuggerRequests();
-			ResetDebugger();
-			_blockDebuggerRequestCount--;
-		}
-	}
 }
 
 bool Emulator::IsEmulationThread()
@@ -1175,35 +1049,20 @@ void Emulator::ProcessAudioPlayerAction(AudioPlayerActionParams p)
 
 void Emulator::ProcessEvent(EventType type, std::optional<CpuType> cpuType)
 {
-	if(_internalDebugger) {
-		_internalDebugger->ProcessEvent(type, cpuType);
-	}
 }
 
 template<CpuType cpuType>
 void Emulator::AddDebugEvent(DebugEventType evtType)
 {
-	if(_internalDebugger) {
-		_internalDebugger->GetEventManager(cpuType)->AddEvent(evtType);
-	}
 }
 
 void Emulator::BreakIfDebugging(CpuType sourceCpu, BreakSource source)
 {
-	if(_internalDebugger) {
-		_internalDebugger->BreakImmediately(sourceCpu, source);
-	}
 }
 
 void Emulator::SetDebuggerDisabled(bool disabled)
 {
 	_isDebuggerDisabled = disabled;
-	_internalDebugger = disabled ? nullptr : _debugger.get();
 }
-
-template void Emulator::AddDebugEvent<CpuType::Snes>(DebugEventType evtType);
-template void Emulator::AddDebugEvent<CpuType::Gameboy>(DebugEventType evtType);
-template void Emulator::AddDebugEvent<CpuType::Nes>(DebugEventType evtType);
-template void Emulator::AddDebugEvent<CpuType::Pce>(DebugEventType evtType);
 
 thread_local std::thread::id Emulator::_currentThreadId = std::this_thread::get_id();

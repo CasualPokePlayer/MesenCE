@@ -56,6 +56,7 @@ public:
 	bool IsPlaying() override;
 
 	//Inherited via IBatteryProvider
+	void SaveBattery(string extension, uint8_t* data, uint32_t length) override;
 	vector<uint8_t> LoadBattery(string extension) override;
 
 	//Inherited via INotificationListener

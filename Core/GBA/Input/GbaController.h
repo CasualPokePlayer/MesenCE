@@ -61,16 +61,16 @@ protected:
 public:
 	enum Buttons
 	{
-		Up = 0,
-		Down,
-		Left,
-		Right,
-		Start,
-		Select,
+		A = 0,
 		B,
-		A,
-		L,
-		R
+		Select,
+		Start,
+		Right,
+		Left,
+		Up,
+		Down,
+		R,
+		L
 	};
 
 	GbaController(Emulator* emu, uint8_t port, KeyMappingSet keyMappings) : BaseControlDevice(emu, ControllerType::GbaController, port, keyMappings)
