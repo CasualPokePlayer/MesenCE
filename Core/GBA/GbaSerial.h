@@ -125,11 +125,12 @@ public:
 			case 0x128: {
 				UpdateState();
 
+				value |= 0x04; // Always high, as there is no connection
 				BitUtilities::SetBits<0>(_state.Control, value);
 
 				_state.InternalShiftClock = value & 0x01;
 				_state.InternalShiftClockSpeed2MHz = value & 0x02;
-				bool active = value & 0x80;
+				bool active = (value & 0x80) && false; // Never active, as there is no connection
 				if(active && !_state.Active) {
 					_state.StartMasterClock = _memoryManager->GetMasterClock();
 					_state.EndMasterClock = _state.StartMasterClock + (_state.InternalShiftClockSpeed2MHz ? 8 : 64) * (_state.TransferWord ? 32 : 8);
