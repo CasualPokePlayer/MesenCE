@@ -130,10 +130,11 @@ public:
 
 				_state.InternalShiftClock = value & 0x01;
 				_state.InternalShiftClockSpeed2MHz = value & 0x02;
-				bool active = (value & 0x80) && false; // Never active, as there is no connection
+				bool active = value & 0x80;
 				if(active && !_state.Active) {
 					_state.StartMasterClock = _memoryManager->GetMasterClock();
 					_state.EndMasterClock = _state.StartMasterClock + (_state.InternalShiftClockSpeed2MHz ? 8 : 64) * (_state.TransferWord ? 32 : 8);
+					_state.EndMasterClock += 6;
 					if(_state.IrqEnabled) {
 						_state.IrqMasterClock = _state.EndMasterClock;
 						_memoryManager->SetPendingUpdateFlag();
@@ -157,6 +158,7 @@ public:
 					if(_state.StartMasterClock == _memoryManager->GetMasterClock()) {
 						//Update end based on params
 						_state.EndMasterClock = _state.StartMasterClock + (_state.InternalShiftClockSpeed2MHz ? 8 : 64) * (_state.TransferWord ? 32 : 8);
+						_state.EndMasterClock += 6;
 					}
 					if(_state.IrqEnabled) {
 						_state.IrqMasterClock = _state.EndMasterClock;
